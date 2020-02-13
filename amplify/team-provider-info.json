@@ -1,0 +1,14 @@
+{
+    "fnc": {
+        "awscloudformation": {
+            "AuthRoleName": "familycare-fnc-20190912122539-authRole",
+            "UnauthRoleArn": "arn:aws:iam::457651165565:role/familycare-fnc-20190912122539-unauthRole",
+            "AuthRoleArn": "arn:aws:iam::457651165565:role/familycare-fnc-20190912122539-authRole",
+            "Region": "us-west-2",
+            "DeploymentBucketName": "familycare-fnc-20190912122539-deployment",
+            "UnauthRoleName": "familycare-fnc-20190912122539-unauthRole",
+            "StackName": "familycare-fnc-20190912122539",
+            "StackId": "arn:aws:cloudformation:us-west-2:457651165565:stack/familycare-fnc-20190912122539/24ee5a20-d593-11e9-b9aa-0222bb28abfe"
+        }
+    }
+}

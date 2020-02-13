@@ -1,0 +1,73 @@
+Parameters:
+  DBName:
+    Description: The name of the database 
+    Type: String
+    Default: MyDatabase
+    MinLength: 1
+    MaxLength: 32
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: Database name must contain 1 to 64 letters or numbers and can't be a word reserved by the database engine.
+  DBClass:
+    Description: Pick the DB Instance class that will fit the processing power and memory requirements
+    Type: String
+    Default: db.t2.micro
+    AllowedValues:
+      - db.t2.micro
+      - db.t3.small
+      - db.t3.medium
+      - db.t3.large
+    ConstraintDescription: Must be a valid RDS instance class. 
+  DBAllocatedStorage: 
+    Default: 10
+    Description: The size of the database (Gb) 
+    Type: Number 
+    MinValue: 5
+    MaxValue: 1024
+    ConstraintDescription: must be between 5 and 1024Gb.
+  DBUser:
+    Description: The database admin account username
+    Type: String
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: Username must begin with a letter and contain only alphanumeric characters.
+  DBPassword:
+    Description: The database admin account password
+    Type: String
+    NoEcho: true
+    MinLength: 8
+    MaxLength: 32
+    AllowedPattern: '[a-zA-Z0-9]+'
+    ConstraintDescription: Password must be longer than 8 characters and contain only alphanumeric characters.
+
+Resources:
+  rdsInstance:
+    Type: AWS::RDS::DBInstance
+    Properties: 
+      AllocatedStorage: !Ref DBAllocatedStorage
+      BackupRetentionPeriod: 0
+      DBInstanceClass: !Ref DBClass
+      DBInstanceIdentifier: fcni-db
+      DBName: !Ref DBName
+      DBSubnetGroupName: !Ref dbSubnetGroup
+      #DeletionProtection: Boolean
+      Engine: MySQL
+      MasterUsername: !Ref DBUser
+      MasterUserPassword: !Ref DBPassword
+      MultiAZ: No
+      #StorageEncrypted: Boolean
+      StorageType: gp2
+      #Tags: 
+      #  - 
+      VPCSecurityGroups: 
+        - !ImportValue cloudformation-DatabaseSecurityGroup
+
+  dbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: RDS Database Subnet Group
+      SubnetIds:
+        [ !ImportValue cloudformation-PrivateSubnet1, !ImportValue cloudformation-PrivateSubnet2]
+      Tags:
+        - Key: Name 
+          Value: FCNI RDS private subnet group

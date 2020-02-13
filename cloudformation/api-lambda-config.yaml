@@ -1,0 +1,351 @@
+AWSTemplateFormatVersion: '2010-09-09' 
+Description: A REST API with 3 methods to invoke lambda functions.
+
+Parameters:
+  S3BucketName:
+    Description: Name of the S3 bucket where the lambda function code is stored
+    Type: String
+    MinLength: 3
+    MaxLength: 63
+    ConstraintDescription: Name must be between 3 and 64 letters, numbers, or reserved symbols
+
+Resources:
+
+  #Lambda functions for the FCNI API to interact with the database
+  getSurveyLogPolicy:
+    Type: AWS::IAM::Policy
+    Properties: 
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+            Resource: arn:aws:logs:::*
+          - Effect: Allow
+            Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: arn:aws:logs:::log-group:/aws/lambda/GetSurvey:*
+      PolicyName: BasicLambdaLogExecutionPolicy-GetSurvey
+      Roles: 
+        - !Ref getSurveyIamRole
+
+  getSurveyIamRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      Path: /survey/
+      Description: String
+      RoleName: GetSurveyRole
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns: 
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+
+  getSurveyFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: GetSurvey
+      Description: Retrieves the survey questions/information from the database.
+      Code: #LAMBDA FUNCTION CODE IS ZIPPED IN AN S3 BUCKET
+        S3Bucket: !Ref S3BucketName
+        S3Key: getSurvey.zip
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt getSurveyIamRole.Arn
+      Runtime: python3.7
+      VpcConfig:
+          SecurityGroupIds: [!ImportValue cloudformation-LambdaSecurityGroup]
+          SubnetIds: [!ImportValue cloudformation-PrivateSubnet1, !ImportValue cloudformation-PrivateSubnet2]
+
+  getSurveyAPIGatewayInvoke:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt getSurveyFunction.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${fcniAPIGateway}/*/GET/survey
+
+  postSurveyLogPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+            Resource: arn:aws:logs:::*
+          - Effect: Allow
+            Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: arn:aws:logs:::log-group:/aws/lambda/PostSurvey:*
+      PolicyName: BasicLambdaLogExecutionPolicy-PostSurvey
+      Roles: 
+        - !Ref postSurveyIamRole
+
+  postSurveyIamRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      Path: /survey/
+      Description: String
+      RoleName: PostSurveyRole
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns: 
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+
+  postSurveyFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: PostSurvey
+      Description: Posts survey data to the associated RDS instance.
+      Code: #LAMBDA FUNCTION CODE IS ZIPPED IN AN S3 BUCKET
+        S3Bucket: !Ref S3BucketName
+        S3Key: postSurvey.zip
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt postSurveyIamRole.Arn
+      Runtime: python3.7
+      VpcConfig:
+          SecurityGroupIds: [!ImportValue cloudformation-LambdaSecurityGroup]
+          SubnetIds: [!ImportValue cloudformation-PrivateSubnet1, !ImportValue cloudformation-PrivateSubnet2]
+
+  postSurveyAPIGatewayInvoke:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt postSurveyFunction.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${fcniAPIGateway}/*/POST/survey
+
+  postResultLogPolicy:
+    Type: AWS::IAM::Policy
+    Properties: 
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+            Resource: arn:aws:logs:::*
+          - Effect: Allow
+            Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: arn:aws:logs:::log-group:/aws/lambda/PostResult:*
+      PolicyName: BasicLambdaLogExecutionPolicy-PostResult
+      Roles: 
+        - !Ref postResultIamRole
+
+  postResultIamRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      Path: /surveyresult/
+      Description: String
+      RoleName: PostResultRole
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns: 
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies: 
+        - PolicyName: LambdaSESPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: "*"
+
+  postResultFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: PostResult
+      Description: Posts final results to the RDS instance.
+      Code: #LAMBDA FUNCTION CODE IS ZIPPED IN AN S3 BUCKET
+        S3Bucket: !Ref S3BucketName
+        S3Key: postResult.zip
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt postResultIamRole.Arn
+      Runtime: python3.7
+      VpcConfig:
+          SecurityGroupIds:  [!ImportValue cloudformation-LambdaSecurityGroup]
+          SubnetIds: [!ImportValue cloudformation-PrivateSubnet1, !ImportValue cloudformation-PrivateSubnet2]
+
+  postResultAPIGatewayInvoke:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt postResultFunction.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${fcniAPIGateway}/*/POST/surveyresult
+
+
+  #API Gateway
+  fcniAPIGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: fcniGateway
+      Description: This API interacts with 3 lambda functions to pull and push survey information.
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  fcniAPIGatewayDeployment:
+    DependsOn:
+      - getSurveyMethod
+      - postSurveyMethod
+      - postResultMethod
+      - surveyOptionsMethod
+      - surveyResultOptionsMethod
+    Type: AWS::ApiGateway::Deployment
+    Properties:
+      Description: This deploys the api gateway to the beta stage
+      RestApiId: !Ref fcniAPIGateway
+
+  betaStage:
+    Type: AWS::ApiGateway::Stage 
+    Properties:
+      StageName: beta
+      RestApiId: !Ref fcniAPIGateway
+      DeploymentId: !Ref fcniAPIGatewayDeployment
+
+  surveyResource:
+    DependsOn: fcniAPIGateway
+    Type: AWS::ApiGateway::Resource
+    Properties: 
+      RestApiId: !Ref fcniAPIGateway
+      ParentId: 
+        Fn::GetAtt: 
+          - fcniAPIGateway
+          - RootResourceId
+      PathPart: survey
+
+  surveyResultResource:
+    DependsOn: fcniAPIGateway
+    Type: AWS::ApiGateway::Resource
+    Properties: 
+      RestApiId: !Ref fcniAPIGateway
+      ParentId: 
+        Fn::GetAtt: 
+          - fcniAPIGateway
+          - RootResourceId
+      PathPart: surveyresult
+ 
+  getSurveyMethod:
+    Type: AWS::ApiGateway::Method
+    Properties: 
+      ApiKeyRequired: NO
+      AuthorizationType: NONE
+      HttpMethod: GET
+      Integration: 
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${getSurveyFunction.Arn}/invocations
+      ResourceId: !Ref surveyResource
+      RestApiId: !Ref fcniAPIGateway
+      MethodResponses:
+        - 
+          StatusCode: 200
+          ResponseModels: {"application/json" : "Empty"}
+          ResponseParameters: {"method.response.header.Access-Control-Allow-Origin": false}
+
+  postSurveyMethod:
+    Type: AWS::ApiGateway::Method
+    Properties: 
+      ApiKeyRequired: NO
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration: 
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${postSurveyFunction.Arn}/invocations
+      ResourceId: !Ref surveyResource
+      RestApiId: !Ref fcniAPIGateway
+      MethodResponses:
+        - 
+          StatusCode: 200
+          ResponseModels: {"application/json" : "Empty"}
+          ResponseParameters: {"method.response.header.Access-Control-Allow-Origin": false}
+
+  postResultMethod:
+    Type: AWS::ApiGateway::Method
+    Properties: 
+      ApiKeyRequired: NO
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration: 
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${postResultFunction.Arn}/invocations
+      ResourceId: !Ref surveyResultResource
+      RestApiId: !Ref fcniAPIGateway
+      MethodResponses:
+        - 
+          StatusCode: 200
+          ResponseModels: {"application/json" : "Empty"}
+          ResponseParameters: {"method.response.header.Access-Control-Allow-Origin": false}
+
+  surveyOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties: 
+      ApiKeyRequired: NO
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      ResourceId: !Ref surveyResource 
+      RestApiId: !Ref fcniAPIGateway
+      Integration: 
+        Type: MOCK
+        RequestTemplates: {"application/json": "{\"statusCode\": 200}"}
+        IntegrationResponses:
+          - StatusCode: 200
+      MethodResponses:
+        -
+          StatusCode: 200
+          ResponseModels: {"application/json" : "Empty"}
+          ResponseParameters: {"method.response.header.Access-Control-Allow-Origin": true,
+                               "method.response.header.Access-Control-Allow-Methods": false,
+                               "method.response.header.Access-Control-Allow-Headers": false}
+
+  surveyResultOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties: 
+      ApiKeyRequired: NO
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      ResourceId: !Ref surveyResultResource
+      RestApiId: !Ref fcniAPIGateway
+      Integration: 
+        Type: MOCK
+        RequestTemplates: {"application/json": "{\"statusCode\": 200}"}
+        IntegrationResponses:
+          - StatusCode: 200
+      MethodResponses:
+        - 
+          StatusCode: 200
+          ResponseModels: {"application/json" : "Empty"}
+          ResponseParameters: {"method.response.header.Access-Control-Allow-Origin": false,
+                               "method.response.header.Access-Control-Allow-Methods": false,
+                               "method.response.header.Access-Control-Allow-Headers": false}
